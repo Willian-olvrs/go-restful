@@ -2,6 +2,8 @@ version: '3.5'
 services:
   gorestful1: # API - Instância 01
     image: golang
+    volumes:
+      - ./src/:/go/src/
     hostname: gorestful1
     depends_on:
       - db
@@ -18,6 +20,8 @@ services:
 
   gorestful2: # API - Instância 02
     image: golang
+    volumes:
+      - ./src/:/go/src/
     hostname: gorestful2
     depends_on:
       - db
@@ -53,4 +57,4 @@ services:
         limits:
           cpus: '0.75'
           memory: '1.5GB'   
-          
+        
