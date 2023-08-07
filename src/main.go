@@ -11,7 +11,7 @@ import (
     _ "github.com/lib/pq"
     
     dbConfig "gorestful/dbconfig"
-    Pessoa "gorestful/entity/pessoa"
+    dbQueries "gorestful/dbqueries"
 )
 
 
@@ -29,6 +29,6 @@ func checkErr(err error) {
 func main() {
 	var db = dbConfig.SetupDB();
 	
-	Pessoa.GetPessoas(db)
+	dbQueries.GetPessoaById(db, "f7379ae8-8f9b-4cd5-8221-51efe19e721b")
 	fmt.Println("Hello World!")
 }
