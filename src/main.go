@@ -3,8 +3,7 @@ package main
 import (
     //"database/sql"
     //"encoding/json"
-    "fmt"
-    //"log"
+    "log"
     //"net/http"
 
     //"github.com/gorilla/mux"
@@ -30,5 +29,5 @@ func main() {
 	var db = dbConfig.SetupDB();
 	
 	dbQueries.GetPessoaById(db, "f7379ae8-8f9b-4cd5-8221-51efe19e721b")
-	fmt.Println("Hello World!")
+	log.Println("Main Finished")
 }
