@@ -29,5 +29,7 @@ func main() {
 	var db = dbConfig.SetupDB();
 	
 	dbQueries.GetPessoaById(db, "f7379ae8-8f9b-4cd5-8221-51efe19e721b")
+	log.Println(dbQueries.GetTerm(db, "ana"))
 	log.Println("Main Finished")
 }
+
