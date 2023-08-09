@@ -9,8 +9,50 @@ import (
     //"github.com/gorilla/mux"
     _ "github.com/lib/pq"
     "gorestful/entity/pessoa"
+    uuidGoogle "github.com/google/uuid"
 )
 
+var lingMap = make(map[string]int)
+
+func InitLingMap(db *sql.DB) {
+
+	rows, err := db.Query(`SELECT id, ling FROM ling`)
+	checkErr(err)
+    
+	for rows.Next() {
+			
+		var id int;
+		var ling string;
+		
+		var err = rows.Scan(&id, &ling)
+		checkErr(err)
+		
+		lingMap[ling] = id
+	}
+}
+
+func CountPessoas(db *sql.DB) string {
+
+	rows, err := db.Query(`SELECT count(id) FROM pessoa`)
+    checkErr(err)
+    
+    var count string
+    
+    for rows.Next() {
+    
+	    err := rows.Scan(&count)    
+  		checkErr(err)
+    }
+
+    
+    return count
+} 
+
+func InsertPessoa(db *sql.DB, p pessoa.Pessoa){
+
+    log.Println("Insert pessoa =", p.Nome)
+    runInsertPessoa(db, p)
+}
 
 func GetTerm(db *sql.DB, term string) map[string]pessoa.Pessoa {
 
@@ -19,8 +61,6 @@ func GetTerm(db *sql.DB, term string) map[string]pessoa.Pessoa {
    
     return mapP
 }
-
-
 
 func GetPessoaById(db *sql.DB, id string) pessoa.Pessoa {
 
@@ -32,6 +72,36 @@ func GetPessoaById(db *sql.DB, id string) pessoa.Pessoa {
     return p
 }
 
+func runInsertPessoa(db *sql.DB, p pessoa.Pessoa) {
+    
+    uuid := uuidGoogle.New().String()
+    _, err := db.Query(`INSERT INTO pessoa (id, apelido, nome, nascimento) 
+    		VALUES ($1, $2, $3, $4);`, uuid, p.Apelido, p.Nome, p.Nascimento)	 	
+    checkErr(err)
+    
+    runInsertStack(db, p.Stack, uuid)
+}
+
+func runInsertStack( db *sql.DB, stack []string, idPessoa string) {
+
+	log.Println("Insert stack =", idPessoa)
+	for _, ling := range stack {
+	
+		lingIndex, lingIsMapped := lingMap[ling]
+		
+		if(!lingIsMapped) {
+		
+			_, err := db.Query(`INSERT INTO ling(ling) VALUES ($1);`, ling)
+			checkErr(err)
+			
+			InitLingMap(db)
+			lingIndex, lingIsMapped = lingMap[ling]
+		}
+		
+		_, err := db.Query(`INSERT INTO stack(id_pessoa, id_ling) VALUES ($1, $2)`, idPessoa, lingIndex)
+		checkErr(err)
+	}
+}
 
 func runQueryTerm(db *sql.DB, term string) map[string]pessoa.Pessoa {
 
