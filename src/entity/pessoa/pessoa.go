@@ -11,7 +11,7 @@ type Pessoa struct {
 	Apelido string `json:"apelido"`
 	Nome string `json:"nome"`
 	Nascimento string `json:"nascimento"`
-	Stack []string
+	Stack []string `json:"stack"`
 }
 
 

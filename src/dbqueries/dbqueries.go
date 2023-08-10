@@ -67,8 +67,6 @@ func GetPessoaById(db *sql.DB, id string) pessoa.Pessoa {
     log.Println("Getting pessoa by id =", id)
     
     var p = runQueryPessoaById(db, id)
-    
-    log.Println("Getting pessoa by id =", id, "finished")
     return p
 }
 
