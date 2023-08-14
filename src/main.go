@@ -2,14 +2,18 @@ package main
 
 import (
     //"database/sql"
+    "errors"
+    "fmt"
+    "io"
     "encoding/json"
     "log"
     "net/http"
 
     "github.com/gorilla/mux"
- //  "gorestful/entity/pessoa"
+   
     _ "github.com/lib/pq"
     
+    "gorestful/entity/pessoa"
     dbConfig "gorestful/dbconfig"
     dbQueries "gorestful/dbqueries"
 )
@@ -38,13 +42,72 @@ func initRoutes() {
 
 	router := mux.NewRouter()
 	
-	
 	router.HandleFunc("/pessoas/{id}", getPessoas).Methods("GET")
 	router.HandleFunc("/contagem-pessoas", getContagemPessoas).Methods("GET")
+	router.HandleFunc("/pessoas", getTermo).Methods("GET")
+	router.HandleFunc("/pessoas", postPessoas).Methods("POST")
 	
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
 
+func postPessoas(w http.ResponseWriter, r *http.Request) {
+
+	dec := json.NewDecoder(r.Body)
+	
+	var p pessoa.Pessoa
+	
+	err := dec.Decode(&p)
+	
+	if(err != nil){
+		checkPostRequestErr(err, w, r)
+		return 
+	}
+	
+	if(p.Nome == nil || p.Apelido == nil || p.Nascimento == nil) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+	
+	log.Println("POST /pessoas/", p)
+	checkErr(err)
+
+	
+    _, errInsert := dbQueries.InsertPessoa(DB, p)
+    
+    if( errInsert != nil ){
+    	switch errInsert.Code.Name() {
+			case "unique_violation":
+				w.WriteHeader(http.StatusUnprocessableEntity)
+    			
+		}
+    }
+    
+    
+}
+
+
+func getTermo(w http.ResponseWriter, r *http.Request) {
+
+    termQuery := r.URL.Query()["t"]
+	log.Println("GET /pessoas?t=", termQuery)
+	
+	if(len(termQuery) == 0 ||  len(termQuery) > 1) {
+		
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	term := termQuery[0]
+	mapPessoas := dbQueries.GetTerm(DB, term )
+	
+	listPessoas := []pessoa.Pessoa{}
+	
+	for  _, value := range mapPessoas {
+		listPessoas = append(listPessoas, value)
+	}
+
+	json.NewEncoder(w).Encode(listPessoas)
+}
 
 func getContagemPessoas(w http.ResponseWriter, r *http.Request) {
 	
@@ -64,6 +127,50 @@ func checkErr(err error) {
     if err != nil {
         panic(err)
     }
+}
+func checkPostRequestErr(err error, w http.ResponseWriter, r *http.Request){
+
+
+        var syntaxError *json.SyntaxError
+        var unmarshalTypeError *json.UnmarshalTypeError
+
+        switch {
+        // Catch any syntax errors in the JSON and send an error message
+        // which interpolates the location of the problem to make it
+        // easier for the client to fix.
+        case errors.As(err, &syntaxError):
+            msg := fmt.Sprintf("Request body contains badly-formed JSON (at position %d)", syntaxError.Offset)
+            http.Error(w, msg, http.StatusBadRequest)
+
+        // In some circumstances Decode() may also return an
+        // io.ErrUnexpectedEOF error for syntax errors in the JSON. There
+        // is an open issue regarding this at
+        // https://github.com/golang/go/issues/25956.
+        case errors.Is(err, io.ErrUnexpectedEOF):
+            msg := fmt.Sprintf("Request body contains badly-formed JSON")
+            http.Error(w, msg, http.StatusBadRequest)
+
+        // Catch any type errors, like trying to assign a string in the
+        // JSON request body to a int field in our Person struct. We can
+        // interpolate the relevant field name and position into the error
+        // message to make it easier for the client to fix.
+        case errors.As(err, &unmarshalTypeError):
+            msg := fmt.Sprintf("Request body contains an invalid value for the %q field (at position %d)", unmarshalTypeError.Field, unmarshalTypeError.Offset)
+            http.Error(w, msg, http.StatusBadRequest)
+
+        // An io.EOF error is returned by Decode() if the request body is
+        // empty.
+        case errors.Is(err, io.EOF):
+            msg := "Request body must not be empty"
+            http.Error(w, msg, http.StatusBadRequest)
+
+        // Otherwise default to logging the error and sending a 500 Internal
+        // Server Error response.
+        default:
+            log.Print(err.Error())
+            http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+        }
+        return
 }
 
 

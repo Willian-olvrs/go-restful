@@ -7,7 +7,7 @@ import (
     //"net/http"
 
     //"github.com/gorilla/mux"
-    _ "github.com/lib/pq"
+    "github.com/lib/pq"
     "gorestful/entity/pessoa"
     uuidGoogle "github.com/google/uuid"
 )
@@ -48,10 +48,10 @@ func CountPessoas(db *sql.DB) string {
     return count
 } 
 
-func InsertPessoa(db *sql.DB, p pessoa.Pessoa){
+func InsertPessoa(db *sql.DB, p pessoa.Pessoa) (*pessoa.Pessoa, *pq.Error) {
 
     log.Println("Insert pessoa =", p.Nome)
-    runInsertPessoa(db, p)
+    return runInsertPessoa(db, p)
 }
 
 func GetTerm(db *sql.DB, term string) map[string]pessoa.Pessoa {
@@ -70,14 +70,26 @@ func GetPessoaById(db *sql.DB, id string) pessoa.Pessoa {
     return p
 }
 
-func runInsertPessoa(db *sql.DB, p pessoa.Pessoa) {
+func runInsertPessoa(db *sql.DB, p pessoa.Pessoa) (*pessoa.Pessoa, *pq.Error) {
     
     uuid := uuidGoogle.New().String()
     _, err := db.Query(`INSERT INTO pessoa (id, apelido, nome, nascimento) 
-    		VALUES ($1, $2, $3, $4);`, uuid, p.Apelido, p.Nome, p.Nascimento)	 	
+    		VALUES ($1, $2, $3, $4);`, uuid, p.Apelido, p.Nome, p.Nascimento)
+    		 	
+    if err, ok := err.(*pq.Error); ok {
+    
+    	switch err.Code.Name() {
+    		case "unique_violation":
+    			return nil, err
+    			
+    	}
+	}
+    
     checkErr(err)
     
     runInsertStack(db, p.Stack, uuid)
+    
+    return &p, nil
 }
 
 func runInsertStack( db *sql.DB, stack []string, idPessoa string) {
@@ -93,7 +105,7 @@ func runInsertStack( db *sql.DB, stack []string, idPessoa string) {
 			checkErr(err)
 			
 			InitLingMap(db)
-			lingIndex, lingIsMapped = lingMap[ling]
+			lingIndex = lingMap[ling]
 		}
 		
 		_, err := db.Query(`INSERT INTO stack(id_pessoa, id_ling) VALUES ($1, $2)`, idPessoa, lingIndex)
@@ -160,10 +172,10 @@ func addToMap(rows *sql.Rows, mapPessoa map[string]pessoa.Pessoa) map[string]pes
                 
         p := mapPessoa[id]
         
-        p.Id = id;
-        p.Apelido = apelido
-        p.Nome = nome
-        p.Nascimento = nascimento
+        p.Id = &id;
+        p.Apelido = &apelido
+        p.Nome = &nome
+        p.Nascimento = &nascimento
         
 		p.Stack = append(p.Stack,ling)
 		
@@ -204,10 +216,10 @@ func runQueryPessoaById(db *sql.DB, id string) pessoa.Pessoa {
         // check errors
         checkErr(err)
         
-        p.Id = id;
-        p.Apelido = apelido
-        p.Nome = nome
-        p.Nascimento = nascimento
+        p.Id = &id;
+        p.Apelido = &apelido
+        p.Nome = &nome
+        p.Nascimento = &nascimento
         
         stack = append(stack,ling)
     }
