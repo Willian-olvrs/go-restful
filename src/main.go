@@ -2,7 +2,9 @@ package main
 
 import (
     //"database/sql"
+    "os"
     "errors"
+    "strings"
     "fmt"
     "io"
     "encoding/json"
@@ -47,7 +49,9 @@ func initRoutes() {
 	router.HandleFunc("/pessoas", getTermo).Methods("GET")
 	router.HandleFunc("/pessoas", postPessoas).Methods("POST")
 	
-	log.Fatal(http.ListenAndServe(":8000", router))
+	var port string
+	port = strings.Join([]string{":", os.Getenv("HTPP_PORT")}, "")
+	log.Fatal(http.ListenAndServe(port, router))
 }
 
 func postPessoas(w http.ResponseWriter, r *http.Request) {

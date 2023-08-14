@@ -2,6 +2,8 @@ package dbconfig
 
 import (
     "database/sql"
+     "os"
+     "log"
     //"encoding/json"
     "fmt"
     //"log"
@@ -11,19 +13,21 @@ import (
     _ "github.com/lib/pq"
 )
 
-const (
+const DB_DRIVER = "postgres"
+var (
 
-	DB_HOST = "localhost"
-	DB_PORT = "5455"
-	DB_USER = "postgres"
-	DB_PASSWORD = "password"
-	DB_NAME = "gorestful"
+	DB_HOST = os.Getenv("DB_HOST") //localhost
+	DB_PORT = os.Getenv("DB_PORT") //5432
+	DB_USER = os.Getenv("DB_USER") //postgres
+	DB_PASSWORD = os.Getenv("DB_PASSWORD") //password
+	DB_NAME = os.Getenv("DB_NAME") //gorestful
 )
 
 func SetupDB() *sql.DB {
 
     dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
-    db, err := sql.Open("postgres", dbinfo)
+    log.Printf(dbinfo)
+    db, err := sql.Open(DB_DRIVER, dbinfo)
     
     checkErr(err)
     fmt.Println("Connected!");
