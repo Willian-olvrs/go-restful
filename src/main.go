@@ -50,7 +50,7 @@ func initRoutes() {
 	router.HandleFunc("/pessoas", postPessoas).Methods("POST")
 	
 	var port string
-	port = strings.Join([]string{":", os.Getenv("HTPP_PORT")}, "")
+	port = strings.Join([]string{":", os.Getenv("HTTP_PORT")}, "")
 	log.Fatal(http.ListenAndServe(port, router))
 }
 
@@ -81,12 +81,9 @@ func postPessoas(w http.ResponseWriter, r *http.Request) {
     if( errInsert != nil ){
     	switch errInsert.Code.Name() {
 			case "unique_violation":
-				w.WriteHeader(http.StatusUnprocessableEntity)
-    			
+				w.WriteHeader(http.StatusUnprocessableEntity)			
 		}
     }
-    
-    
 }
 
 
