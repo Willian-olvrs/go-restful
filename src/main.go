@@ -26,17 +26,6 @@ func main() {
 
 	dbQueries.InitLingMap(DB)
 	initRoutes()
-	
-	
-//	p := pessoa.Pessoa{ Apelido: "will3", Nome:"Willian Santos", Nascimento:"2023-03-03", Stack: []string{"Java"} }
-//	dbQueries.InsertPessoa(db, p)
-	
-	log.Println(dbQueries.CountPessoas(DB))
-
-
-	log.Println(dbQueries.GetTerm(DB, "ana"))
-	log.Println("Main Finished")
-	initRoutes()
 }
 
 func initRoutes() {
@@ -72,25 +61,22 @@ func postPessoas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	log.Println("POST /pessoas/", p)
 	checkErr(err)
-
-	
-    _, errInsert := dbQueries.InsertPessoa(DB, p)
+    pessoaInserted, errInsert := dbQueries.InsertPessoa(DB, p)
     
     if( errInsert != nil ){
-    	switch errInsert.Code.Name() {
-			case "unique_violation":
-				w.WriteHeader(http.StatusUnprocessableEntity)			
-		}
+
+		w.WriteHeader(http.StatusUnprocessableEntity)			
     }
+    
+    w.WriteHeader(http.StatusCreated)			
+    w.Header().Set("Location", "/pessoas/"+*pessoaInserted.Id)
 }
 
 
 func getTermo(w http.ResponseWriter, r *http.Request) {
 
     termQuery := r.URL.Query()["t"]
-	log.Println("GET /pessoas?t=", termQuery)
 	
 	if(len(termQuery) == 0 ||  len(termQuery) > 1) {
 		
@@ -119,7 +105,6 @@ func getPessoas(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
     id := params["id"]
-    log.Println("GET /pessoas/", id)
 	
 	json.NewEncoder(w).Encode(dbQueries.GetPessoaById(DB, id))
 }
