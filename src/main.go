@@ -25,6 +25,7 @@ var DB = dbConfig.SetupDB()
 func main() {
 
 	dbQueries.InitLingMap(DB)
+	go dbQueries.BulkInsert(DB, false)
 	initRoutes()
 }
 
@@ -56,7 +57,7 @@ func postPessoas(w http.ResponseWriter, r *http.Request) {
 		return 
 	}
 	
-	if(p.Nome == nil || p.Apelido == nil || p.Nascimento == nil) {
+	if(p.Nome == nil || p.Apelido == nil || p.Nascimento == nil || len(*p.Nome) > 100 || len(*p.Apelido) > 32 || checkDate(*p.Nascimento) || checkStack(p.Stack)) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
@@ -71,6 +72,40 @@ func postPessoas(w http.ResponseWriter, r *http.Request) {
     
     w.WriteHeader(http.StatusCreated)			
     w.Header().Set("Location", "/pessoas/"+*pessoaInserted.Id)
+}
+
+func checkDate( date string) bool {
+
+	d := strings.Split(date, "-")
+	
+	if(len(d) != 3){
+		return true
+	}
+	
+	if(len(d[0]) != 4 || d[0] < "1970" ) {
+		return true
+	}
+		
+	if(len(d[1]) != 2 || d[1] < "01" || d[1] > "12") {
+	    return true
+	}
+	
+	if(len(d[2]) != 2 || d[2] < "01" || d[2] > "31") {
+		return true
+	}
+		
+ 	return false
+}
+
+func checkStack( stack []string ) bool {
+
+	for i := 0; i < len(stack); i++  {
+		if(len(stack[i]) > 32){
+			return true;
+		}
+	}
+		
+ 	return false
 }
 
 
@@ -106,7 +141,12 @@ func getPessoas(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
     id := params["id"]
 	
-	json.NewEncoder(w).Encode(dbQueries.GetPessoaById(DB, id))
+	p, err := dbQueries.GetPessoaById(DB, id)
+	
+	if(err != nil){
+		w.WriteHeader(http.StatusNotFound)
+	}
+	json.NewEncoder(w).Encode(*p)
 }
 
 func checkErr(err error) {

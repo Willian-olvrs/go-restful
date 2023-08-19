@@ -7,8 +7,8 @@ CREATE TABLE pessoa (
 		nascimento date NOT NULL
 	);
 
-CREATE INDEX index_pessoa_apelido ON pessoa USING btree (apelido);
-CREATE INDEX index_pessoa_nome ON pessoa USING gin (nome);
+CREATE INDEX index_pessoa_apelido ON pessoa USING gin (apelido gin_trgm_ops;
+CREATE INDEX index_pessoa_nome ON pessoa USING gin (nome gin_trgm_ops);
 
 CREATE TABLE ling (
 		id SERIAL PRIMARY KEY,
@@ -24,7 +24,7 @@ CREATE TABLE stack (
 		CONSTRAINT fk_pessoa FOREIGN KEY (id_pessoa) REFERENCES pessoa(id),
 		CONSTRAINT fk_ling FOREIGN KEY (id_ling) REFERENCES ling(id)
 	);
-	
+/*
 INSERT INTO pessoa (id, apelido, nome, nascimento) VALUES ('f7379ae8-8f9b-4cd5-8221-51efe19e721b', 'josé', 'José Roberto', '2000-10-01');
 INSERT INTO pessoa (id, apelido, nome, nascimento) VALUES ('5ce4668c-4710-4cfb-ae5f-38988d6d49cb', 'ana', 'Ana Barbosa', '1985-09-23');
 INSERT INTO ling(ling) VALUES ('C#');
@@ -38,7 +38,7 @@ INSERT INTO stack(id_pessoa, id_ling) VALUES ('f7379ae8-8f9b-4cd5-8221-51efe19e7
 INSERT INTO stack(id_pessoa, id_ling) VALUES ('5ce4668c-4710-4cfb-ae5f-38988d6d49cb', 2);
 INSERT INTO stack(id_pessoa, id_ling) VALUES ('5ce4668c-4710-4cfb-ae5f-38988d6d49cb', 4);
 
-/*select (pessoa.id,apelido,nome,nascimento,ling) 
+select (pessoa.id,apelido,nome,nascimento,ling) 
 	from pessoa left join 
 		(select * from stack right join (select * from ling where ling='C#' OR ling='Node') as ling_select ON id_ling=ling_select.id) as stack_select
 	on pessoa.id=stack_select.id_pessoa
