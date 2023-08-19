@@ -10,7 +10,8 @@ import (
     "encoding/json"
     "log"
     "net/http"
-
+	"strconv"
+	
     "github.com/gorilla/mux"
    
     _ "github.com/lib/pq"
@@ -57,7 +58,7 @@ func postPessoas(w http.ResponseWriter, r *http.Request) {
 		return 
 	}
 	
-	if(p.Nome == nil || p.Apelido == nil || p.Nascimento == nil || len(*p.Nome) > 100 || len(*p.Apelido) > 32 || checkDate(*p.Nascimento) || checkStack(p.Stack)) {
+	if(p.Nome == nil || p.Apelido == nil || p.Nascimento == nil || len(*p.Nome) > 100 || len(*p.Apelido) > 32 || !checkDateIsValid(*p.Nascimento) || checkStack(p.Stack)) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
@@ -74,27 +75,64 @@ func postPessoas(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Location", "/pessoas/"+*pessoaInserted.Id)
 }
 
-func checkDate( date string) bool {
+func checkDateIsValid( date string) bool {
 
 	d := strings.Split(date, "-")
 	
 	if(len(d) != 3){
-		return true
+		return false
 	}
 	
-	if(len(d[0]) != 4 || d[0] < "1970" ) {
-		return true
+	year := d[0]
+	month := d[1]
+	day := d[2]
+	
+	if(len(year) != 4) {
+		return false
 	}
 		
-	if(len(d[1]) != 2 || d[1] < "01" || d[1] > "12") {
-	    return true
+	if(len(month) != 2 || month < "01" || month > "12") {
+	    return false
 	}
 	
-	if(len(d[2]) != 2 || d[2] < "01" || d[2] > "31") {
+	if(len(day) != 2 || day < "01" || day > "31") {
+		return false
+	}
+	
+	if(month == "02" && day > "28"){
+	
+		yearInt, err := strconv.Atoi(year)
+		
+		if(err != nil){
+			return false;
+		}
+	
+		if(!isLeapYear(yearInt)){
+			return false;		
+		}
+		
+		if(day != "29"){
+			return false;
+		}
+	}
+	
+	if(day > "30" && (month == "04" || month == "06" || month == "09" || month == "11")){
+		return false
+	}
+
+ 	return true
+}
+
+func isLeapYear(year int) bool {
+	if year%400 == 0 {
+		return true
+	} else if year%100 == 0 {
+		return false
+	} else if year%4 == 0 {
 		return true
 	}
-		
- 	return false
+
+	return false
 }
 
 func checkStack( stack []string ) bool {

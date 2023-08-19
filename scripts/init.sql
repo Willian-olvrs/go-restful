@@ -9,6 +9,8 @@ CREATE TABLE pessoa (
 
 CREATE INDEX index_pessoa_apelido ON pessoa USING gin (apelido gin_trgm_ops;
 CREATE INDEX index_pessoa_nome ON pessoa USING gin (nome gin_trgm_ops);
+--CREATE INDEX index_pessoa_apelido ON pessoa USING GIN (to_tsvector('english', apelido));
+--CREATE INDEX index_pessoa_nome ON pessoa USING GIN (to_tsvector('english', nome));
 
 CREATE TABLE ling (
 		id SERIAL PRIMARY KEY,

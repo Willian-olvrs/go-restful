@@ -96,7 +96,7 @@ func runQueryTerm(db *sql.DB, term string) map[string]pessoa.Pessoa {
     rows_query_ling, err := db.Query(`
     	SELECT pessoa.id, apelido, nome, nascimento, ling
 			FROM pessoa RIGHT JOIN 
-				(SELECT * FROM stack RIGHT JOIN 
+				(SELECT * FROM stack LEFT JOIN 
 					(SELECT * FROM ling WHERE ling=$1) AS ling_select ON id_ling=ling_select.id) AS stack_select
 		ON pessoa.id=stack_select.id_pessoa`, term)
     checkErr(err)
@@ -200,8 +200,12 @@ func BulkInsert(db *sql.DB, force bool) error {
 		time.NewTicker(500 * time.Millisecond)
 	}
 	
-	runInsertPessoaBulk(db)
-	runInsertStackBulk(db)
+	err := runInsertPessoaBulk(db)
+  	err = runInsertStackBulk(db)
+	
+	if( err != nil ){
+		return err
+	}
 	
 	pessoaMapCache.Range( func( key interface{}, value interface{}) bool {
 		pessoaMapCache.Delete(key)
@@ -297,6 +301,10 @@ func runInsertPessoaBulk( db *sql.DB) error {
 	}
 	
 	_, err = txn.Exec(insertStatement, values...)
+	
+	if err != nil {
+		return err
+	}
 	err = txn.Commit();
 	
 	addIdToCache(db)
