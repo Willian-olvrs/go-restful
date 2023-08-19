@@ -60,7 +60,14 @@ func InsertPessoa(db *sql.DB, p pessoa.Pessoa) (*pessoa.Pessoa, error) {
 
 func GetTerm(db *sql.DB, term string) map[string]pessoa.Pessoa {
 
-    var mapP = runQueryTerm(db, term)
+    var mapPSync = runQueryTerm(db, term)
+    var mapP = make(map[string]pessoa.Pessoa)
+
+    mapPSync.Range( func(key any, value any) bool {
+    
+    	mapP[key.(string)] = value.(pessoa.Pessoa)
+    	return true
+    })
    
     return mapP
 }
@@ -80,37 +87,58 @@ func runInsertPessoa(db *sql.DB, p pessoa.Pessoa) (*pessoa.Pessoa, error) {
     return &p, nil
 }
 
-func runQueryTerm(db *sql.DB, term string) map[string]pessoa.Pessoa {
 
-    BulkInsert(db, true)
+func pessoaTermQuery(db *sql.DB, term string, mapPessoa *sync.Map, wg *sync.WaitGroup) {
 
-    rows_query_pessoas, err := db.Query(`
+    defer wg.Done()
+	rows_query_pessoas, err := db.Query(`
     	SELECT pessoa_select.id, apelido, nome, nascimento, ling 
 			FROM ling RIGHT JOIN 
 				(SELECT * FROM stack RIGHT JOIN 
-			 		(SELECT * FROM pessoa WHERE apelido=$1 OR nome LIKE '%'||$1||'%') AS p ON id_pessoa = p.id) AS pessoa_select
+			 		(SELECT * FROM pessoa WHERE to_tsvector('english', apelido) @@ plainto_tsquery('english', $1)  OR nome LIKE '%'||$1||'%') AS p ON id_pessoa = p.id) AS pessoa_select
 	 	ON ling.id=pessoa_select.id_ling`, term)
+
     checkErr(err)
    	defer rows_query_pessoas.Close()
-    
-    rows_query_ling, err := db.Query(`
+
+	addToMap(rows_query_pessoas, mapPessoa)
+
+}
+
+func lingTermQuery(db *sql.DB, term string, mapPessoa *sync.Map, wg *sync.WaitGroup) {
+
+    defer wg.Done()
+
+	rows_query_ling, err := db.Query(`
     	SELECT pessoa.id, apelido, nome, nascimento, ling
 			FROM pessoa RIGHT JOIN 
 				(SELECT * FROM stack LEFT JOIN 
-					(SELECT * FROM ling WHERE ling=$1) AS ling_select ON id_ling=ling_select.id) AS stack_select
-		ON pessoa.id=stack_select.id_pessoa`, term)
+					(SELECT * FROM ling WHERE to_tsvector('english', ling) @@ plainto_tsquery('english', $1) ) AS ling_select ON id_ling=ling_select.id) AS stack_select 
+					ON pessoa.id=stack_select.id_pessoa`, term)
     checkErr(err)
+
    	defer rows_query_ling.Close()
+	addToMap(rows_query_ling, mapPessoa)
+}
+
+func runQueryTerm(db *sql.DB, term string) sync.Map {
+
+    BulkInsert(db, true)
+   
+    var mapPessoa sync.Map
+    var wg sync.WaitGroup
     
-    mapPessoa := make(map[string]pessoa.Pessoa)
-    
-    mapPessoa = addToMap(rows_query_pessoas, mapPessoa);
-    mapPessoa = addToMap(rows_query_ling, mapPessoa);
-    
+    wg.Add(1)
+    go pessoaTermQuery(db, term, &mapPessoa, &wg)
+    wg.Add(1)
+    go lingTermQuery(db, term, &mapPessoa, &wg)
+
+    wg.Wait()
+
     return mapPessoa
 }
 
-func addToMap(rows *sql.Rows, mapPessoa map[string]pessoa.Pessoa) map[string]pessoa.Pessoa {
+func addToMap(rows *sql.Rows, mapPessoa *sync.Map) {
 
 
 	for rows.Next() {
@@ -125,7 +153,7 @@ func addToMap(rows *sql.Rows, mapPessoa map[string]pessoa.Pessoa) map[string]pes
         // check errors
         checkErr(err)
                 
-        p := mapPessoa[id]
+        var p pessoa.Pessoa
         
         p.Id = &id;
         p.Apelido = &apelido
@@ -136,11 +164,20 @@ func addToMap(rows *sql.Rows, mapPessoa map[string]pessoa.Pessoa) map[string]pes
         	p.Stack = append(p.Stack, ling.String)
         }
 
+        objFromMap, ok := mapPessoa.Load(id)
+		if(ok) {
 		
-		mapPessoa[id] = p
+			pessoaFromMap := objFromMap.(pessoa.Pessoa)
+			pessoaFromMap.Id = p.Id;
+    	    pessoaFromMap.Apelido = p.Apelido
+    	    pessoaFromMap.Nome = p.Nome
+	        pessoaFromMap.Nascimento = p.Nascimento
+	        pessoaFromMap.Stack = p.Stack
+		} else {
+		
+			mapPessoa.Store(*p.Id, p)
+		}
     }
-
-	return mapPessoa
 }
 	
 func runQueryPessoaById(db *sql.DB, id string) (*pessoa.Pessoa, error) {
@@ -197,7 +234,7 @@ func runQueryPessoaById(db *sql.DB, id string) (*pessoa.Pessoa, error) {
 func BulkInsert(db *sql.DB, force bool) error {
 
 	if( force) {
-		time.NewTicker(500 * time.Millisecond)
+		time.NewTicker(100 * time.Millisecond)
 	}
 	
 	err := runInsertPessoaBulk(db)

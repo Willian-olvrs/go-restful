@@ -1,4 +1,5 @@
 CREATE DATABASE gorestful;
+create extension if not exists pg_trgm;
 
 CREATE TABLE pessoa (
 		id uuid PRIMARY KEY,
@@ -7,9 +8,9 @@ CREATE TABLE pessoa (
 		nascimento date NOT NULL
 	);
 
-CREATE INDEX index_pessoa_apelido ON pessoa USING gin (apelido gin_trgm_ops;
+--CREATE INDEX index_pessoa_apelido ON pessoa USING gin (apelido gin_trgm_ops;
 CREATE INDEX index_pessoa_nome ON pessoa USING gin (nome gin_trgm_ops);
---CREATE INDEX index_pessoa_apelido ON pessoa USING GIN (to_tsvector('english', apelido));
+CREATE INDEX index_pessoa_apelido ON pessoa USING GIN (to_tsvector('english', apelido));
 --CREATE INDEX index_pessoa_nome ON pessoa USING GIN (to_tsvector('english', nome));
 
 CREATE TABLE ling (
@@ -17,7 +18,7 @@ CREATE TABLE ling (
 		ling varchar(32) NOT NULL
 	);
 	
-CREATE INDEX index_ling_ling ON ling USING btree (ling);
+CREATE INDEX index_ling_ling ON ling USING gin (to_tsvector('english', ling));
 
 CREATE TABLE stack (
 		id_pessoa uuid NOT NULL,

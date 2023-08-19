@@ -58,7 +58,7 @@ func postPessoas(w http.ResponseWriter, r *http.Request) {
 		return 
 	}
 	
-	if(p.Nome == nil || p.Apelido == nil || p.Nascimento == nil || len(*p.Nome) > 100 || len(*p.Apelido) > 32 || !checkDateIsValid(*p.Nascimento) || checkStack(p.Stack)) {
+	if(p.Nome == nil || p.Apelido == nil || p.Nascimento == nil || len(*p.Nome) > 100 || len(*p.Apelido) > 32 || !checkDateIsValid(*p.Nascimento) || !checkStackIsValid(p.Stack)) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
@@ -135,15 +135,15 @@ func isLeapYear(year int) bool {
 	return false
 }
 
-func checkStack( stack []string ) bool {
+func checkStackIsValid( stack []string ) bool {
 
 	for i := 0; i < len(stack); i++  {
 		if(len(stack[i]) > 32){
-			return true;
+			return false;
 		}
 	}
 		
- 	return false
+ 	return true;
 }
 
 
