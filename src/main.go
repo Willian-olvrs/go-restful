@@ -11,7 +11,7 @@ import (
     "log"
     "net/http"
 	"strconv"
-	
+	"time"	
     "github.com/gorilla/mux"
    
     _ "github.com/lib/pq"
@@ -24,11 +24,18 @@ import (
 var DB = dbConfig.SetupDB()
 
 func main() {
-
-	dbQueries.InitLingMap(DB)
-	go dbQueries.BulkInsert(DB, false)
+	
+	go setUpTicker() 
 	initRoutes()
 }
+
+func setUpTicker() {
+
+    ticker := time.NewTicker(100 * time.Millisecond)
+    for _ = range ticker.C {
+          dbQueries.BulkInsert(DB)
+	}
+} 
 
 func initRoutes() {
 

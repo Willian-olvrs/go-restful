@@ -6,9 +6,8 @@ import (
     "database/sql"
     "fmt"
     "strings"
-    "time"
     "errors"
-    "github.com/lib/pq"
+    _ "github.com/lib/pq"
     "gorestful/entity/pessoa"
     uuidGoogle "github.com/google/uuid"
 )
@@ -16,8 +15,6 @@ import (
 var lingMap = make(map[string]int)
 var pessoaMapCache sync.Map
 var idPessoaMapCache sync.Map
-var lastPessoaUpdate = time.Now()
-
 
 func InitLingMap(db *sql.DB) {
 
@@ -60,16 +57,7 @@ func InsertPessoa(db *sql.DB, p pessoa.Pessoa) (*pessoa.Pessoa, error) {
 
 func GetTerm(db *sql.DB, term string) map[string]pessoa.Pessoa {
 
-    var mapPSync = runQueryTerm(db, term)
-    var mapP = make(map[string]pessoa.Pessoa)
-
-    mapPSync.Range( func(key any, value any) bool {
-    
-    	mapP[key.(string)] = value.(pessoa.Pessoa)
-    	return true
-    })
-   
-    return mapP
+    return  runQueryTerm(db, term)
 }
 
 func GetPessoaById(db *sql.DB, id string) (*pessoa.Pessoa, error) {
@@ -81,105 +69,63 @@ func runInsertPessoa(db *sql.DB, p pessoa.Pessoa) (*pessoa.Pessoa, error) {
     
     uuid := uuidGoogle.New().String()
     p.Id = &uuid
-        
-    pessoaMapCache.Store(p.Id, p)
-	
+    pessoaMapCache.Store(*p.Id, p)
+
     return &p, nil
 }
 
 
-func pessoaTermQuery(db *sql.DB, term string, mapPessoa *sync.Map, wg *sync.WaitGroup) {
+func runQueryTerm(db *sql.DB, term string) map[string]pessoa.Pessoa {
 
-    defer wg.Done()
-	rows_query_pessoas, err := db.Query(`
-    	SELECT pessoa_select.id, apelido, nome, nascimento, ling 
-			FROM ling RIGHT JOIN 
-				(SELECT * FROM stack RIGHT JOIN 
-			 		(SELECT * FROM pessoa WHERE to_tsvector('english', apelido) @@ plainto_tsquery('english', $1)  OR nome LIKE '%'||$1||'%') AS p ON id_pessoa = p.id) AS pessoa_select
-	 	ON ling.id=pessoa_select.id_ling`, term)
-
-    checkErr(err)
+   	mapPessoa := make(map[string]pessoa.Pessoa)
+   	
+   	rows_query_pessoas, err := db.Query(`
+    	SELECT id, apelido, nome, nascimento, stack
+			FROM pessoa 
+			WHERE search_p LIKE '%'||$1||'%'`, term)
+	checkErr(err)
    	defer rows_query_pessoas.Close()
-
-	addToMap(rows_query_pessoas, mapPessoa)
-
-}
-
-func lingTermQuery(db *sql.DB, term string, mapPessoa *sync.Map, wg *sync.WaitGroup) {
-
-    defer wg.Done()
-
-	rows_query_ling, err := db.Query(`
-    	SELECT pessoa.id, apelido, nome, nascimento, ling
-			FROM pessoa RIGHT JOIN 
-				(SELECT * FROM stack LEFT JOIN 
-					(SELECT * FROM ling WHERE to_tsvector('english', ling) @@ plainto_tsquery('english', $1) ) AS ling_select ON id_ling=ling_select.id) AS stack_select 
-					ON pessoa.id=stack_select.id_pessoa`, term)
-    checkErr(err)
-
-   	defer rows_query_ling.Close()
-	addToMap(rows_query_ling, mapPessoa)
-}
-
-func runQueryTerm(db *sql.DB, term string) sync.Map {
-
-    BulkInsert(db, true)
-   
-    var mapPessoa sync.Map
-    var wg sync.WaitGroup
-    
-    wg.Add(1)
-    go pessoaTermQuery(db, term, &mapPessoa, &wg)
-    wg.Add(1)
-    go lingTermQuery(db, term, &mapPessoa, &wg)
-
-    wg.Wait()
-
-    return mapPessoa
-}
-
-func addToMap(rows *sql.Rows, mapPessoa *sync.Map) {
-
-
-	for rows.Next() {
+	for rows_query_pessoas.Next() {
 	
-        var id string
+		var id string
         var apelido string
         var nome string
         var nascimento string
-        var ling sql.NullString
+        var stack sql.NullString
 
-        var err = rows.Scan(&id, &apelido, &nome, &nascimento, &ling)
-        // check errors
-        checkErr(err)
-                
-        var p pessoa.Pessoa
-        
-        p.Id = &id;
-        p.Apelido = &apelido
-        p.Nome = &nome
-        p.Nascimento = &nascimento
-        
-        if(ling.Valid){
-        	p.Stack = append(p.Stack, ling.String)
-        }
-
-        objFromMap, ok := mapPessoa.Load(id)
-		if(ok) {
-		
-			pessoaFromMap := objFromMap.(pessoa.Pessoa)
-			pessoaFromMap.Id = p.Id;
-    	    pessoaFromMap.Apelido = p.Apelido
-    	    pessoaFromMap.Nome = p.Nome
-	        pessoaFromMap.Nascimento = p.Nascimento
-	        pessoaFromMap.Stack = p.Stack
-		} else {
-		
-			mapPessoa.Store(*p.Id, p)
+        var err = rows_query_pessoas.Scan(&id, &apelido, &nome, &nascimento, &stack)
+       	checkErr(err)
+       	
+		p,isPMapped := mapPessoa[id]
+		if(!isPMapped){
+			var pC pessoa.Pessoa
+			
+			pC.Id = &id
+			pC.Apelido = &apelido
+			pC.Nome = &nome
+			pC.Nascimento = &nascimento
+			mapPessoa[id] = pC
 		}
-    }
+		
+ 		if(stack.Valid){
+			p.Stack = strings.Split(stack.String, " ")
+        }
+	}
+    return mapPessoa
 }
+
+func BulkInsert(db *sql.DB) error {
+
 	
+	err := runInsertPessoaBulk(db)
+	
+	if( err != nil ){
+		return err
+	}
+
+	return nil
+}
+
 func runQueryPessoaById(db *sql.DB, id string) (*pessoa.Pessoa, error) {
 
     pCache, isMapped := pessoaMapCache.Load(id)
@@ -194,28 +140,26 @@ func runQueryPessoaById(db *sql.DB, id string) (*pessoa.Pessoa, error) {
     
     	return nil, errors.New("Id inexistente")
     }
-
+    
     rows, err := db.Query(`
-    	SELECT pessoa.id, apelido, nome, nascimento, ling FROM pessoa 
-    		LEFT JOIN (SELECT * FROM stack LEFT JOIN ling ON id_ling = ling.id) AS stack ON pessoa.id=stack.id_pessoa 
+    	SELECT pessoa.id, apelido, nome, nascimento, stack 
+    		FROM pessoa 
     		WHERE pessoa.id=$1`, id)
 	    
     checkErr(err)
     defer rows.Close()
     
     var p pessoa.Pessoa
-	var stack []string
+	var stackArray []string
 	
     for rows.Next() {
         var id string
         var apelido string
         var nome string
         var nascimento string
-        var ling string
+        var stack string
 
-        err = rows.Scan(&id, &apelido, &nome, &nascimento, &ling)
-     
-        // check errors
+        err = rows.Scan(&id, &apelido, &nome, &nascimento, &stack)
         checkErr(err)
         
         p.Id = &id;
@@ -223,84 +167,13 @@ func runQueryPessoaById(db *sql.DB, id string) (*pessoa.Pessoa, error) {
         p.Nome = &nome
         p.Nascimento = &nascimento
         
-        stack = append(stack,ling)
+        stackArray = strings.Split(stack, " ")
     }
     
-    p.Stack = stack
+    p.Stack = stackArray
     
     return &p, nil
 }
-
-func BulkInsert(db *sql.DB, force bool) error {
-
-	if( force) {
-		time.NewTicker(100 * time.Millisecond)
-	}
-	
-	err := runInsertPessoaBulk(db)
-  	err = runInsertStackBulk(db)
-	
-	if( err != nil ){
-		return err
-	}
-	
-	pessoaMapCache.Range( func( key interface{}, value interface{}) bool {
-		pessoaMapCache.Delete(key)
-		return true
-	})
-
-	return nil
-}
-
-
-func runInsertStackBulk( db *sql.DB) error {
-
-	var	values []interface{}
-	var placeholders []string
-	index := 0
-		
-	pessoaMapCache.Range(func( key interface{}, pI interface{}) bool {
-	
-		p := pI.(pessoa.Pessoa)
-		for _, ling := range p.Stack {
-	
-			updateLingMap(db, ling)
-			_, isIdMapped := idPessoaMapCache.Load(p.Id)
-			if(isIdMapped) {
-				placeholders = append(placeholders, fmt.Sprintf("($%d,$%d)", index*2+1,index*2+2))
-
-				values = append(values, p.Id, lingMap[ling])
-				index++
-			}
-		}
-		
-		return true
-	})
-	
-	stringJoin := strings.Join(placeholders, ",")
-	
-	if (stringJoin == "" || len(stringJoin) == 0) {
-		return nil
-	}
-	
-	insertStatement := fmt.Sprintf("INSERT INTO stack(id_pessoa, id_ling) VALUES %s ON CONFLICT DO NOTHING", stringJoin)
-	
-	txn, err := db.Begin()
-	
-	if err != nil {
-		return err
-	}
-	
-	_, err = txn.Exec(insertStatement, values...)
-	
-	if err != nil {
-		return err
-	}
-	err = txn.Commit(); 
-	
-	return nil
-}
-
 
 func runInsertPessoaBulk( db *sql.DB) error {
 
@@ -308,18 +181,37 @@ func runInsertPessoaBulk( db *sql.DB) error {
 	var placeholders []string
 	index := 0
 	
-	pessoaMapCache.Range(func( key interface{}, pI interface{}) bool {
+	pessoaMapCache.Range(func( key interface{}, value interface{}) bool {
 	
-		p := pI.(pessoa.Pessoa)
+		p := value.(pessoa.Pessoa)
+		search := *p.Nome + *p.Apelido
+		
 		_, isIdMapped := idPessoaMapCache.Load(p.Id)
 		
-		if(!isIdMapped) {
+		if(isIdMapped) {
+			return true
+		}
+		
+	
+		if( len(p.Stack) > 0 ) {
+			stack := ""
+			for _, ling := range p.Stack {
 			
-			placeholders = append(placeholders, fmt.Sprintf("($%d,$%d,$%d,$%d)", index*4+1,index*4+2, index*4+3, index*4+4))
-			values = append(values, p.Id, p.Apelido, p.Nome, p.Nascimento)
+				search = search + ":" + ling
+				stack = stack + " " + ling
+			}
+		
+			pessoaInfo := fmt.Sprintf(`($%d,$%d,$%d,$%d`, index*6+1,index*6+2, index*6+3, index*6+4)
+			placeholders = append(placeholders, fmt.Sprintf("%s,$%d,$%d)", pessoaInfo, index*6+5, index*6+6))
+			values = append(values, *p.Id, *p.Apelido, *p.Nome, *p.Nascimento, stack, search)
 			index++
-
-		}		
+		} else {
+			pessoaInfo := fmt.Sprintf(`($%d,$%d,$%d,$%d`, index*6+1,index*6+2, index*6+3, index*6+4)			
+			placeholders = append(placeholders, fmt.Sprintf("%s,$%d,$%d)", pessoaInfo, index*6+5,index*6+6))
+			values = append(values, *p.Id, *p.Apelido, *p.Nome, *p.Nascimento, "null", search)
+			index++
+		}
+		
 		return true		
 	})
 	
@@ -329,7 +221,7 @@ func runInsertPessoaBulk( db *sql.DB) error {
 		return nil
 	}
 	
-	insertStatement := fmt.Sprintf("INSERT INTO pessoa (id, apelido, nome, nascimento) VALUES %s ON CONFLICT DO NOTHING", stringJoin)
+	insertStatement := fmt.Sprintf("INSERT INTO pessoa (id, apelido, nome, nascimento,stack,search_p) VALUES %s ON CONFLICT DO NOTHING", stringJoin)
 	
 	txn, err := db.Begin()
 
@@ -344,10 +236,16 @@ func runInsertPessoaBulk( db *sql.DB) error {
 	}
 	err = txn.Commit();
 	
+	pessoaMapCache.Range( func( key interface{}, value interface{}) bool {
+		pessoaMapCache.Delete(key)
+		return true
+	})
+	
 	addIdToCache(db)
 	
 	return nil
 }
+
 
 func addIdToCache(db *sql.DB) {
 	
@@ -364,36 +262,6 @@ func addIdToCache(db *sql.DB) {
         
         idPessoaMapCache.Store(id, id)
     }
-}
-
-
-func updateLingMap(db *sql.DB, ling string) error {
-
-	_, lingIsMapped := lingMap[ling]
-		
-	if(!lingIsMapped) {
-	
-		insertQuery, err := db.Query(`INSERT INTO ling(ling) VALUES($1);`, ling)
-		
-		if(insertQuery != nil) {
-			defer insertQuery.Close()
-		}
-		
-		if err, ok := err.(*pq.Error); ok {	
-			
-			switch err.Code.Name() {
-				case "unique_violation":
-					return nil
-				default:
-					return err
-			}
-		}
-		checkErr(err)
-		
-		InitLingMap(db)
-	}
-	
-	return nil
 }
 
 func checkErr(err error) {
