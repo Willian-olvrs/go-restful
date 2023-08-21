@@ -31,7 +31,7 @@ func main() {
 
 func setUpTicker() {
 
-    ticker := time.NewTicker(100 * time.Millisecond)
+    ticker := time.NewTicker(50 * time.Millisecond)
     for _ = range ticker.C {
           dbQueries.BulkInsert(DB)
 	}
@@ -75,7 +75,8 @@ func postPessoas(w http.ResponseWriter, r *http.Request) {
     
     if( errInsert != nil ){
 
-		w.WriteHeader(http.StatusUnprocessableEntity)			
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return		
     }
     
     w.WriteHeader(http.StatusCreated)			

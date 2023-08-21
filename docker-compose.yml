@@ -77,11 +77,13 @@ services:
   db: # Banco de dados
    image: postgres
    volumes:
-      - ./postgresql.conf:/var/lib/postgresql/data/postgresql.conf
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
    ports:
       - 5432:5432
    environment:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 'password'
+      POSTGRES_DB: gorestful
    deploy:
       resources:
         limits:

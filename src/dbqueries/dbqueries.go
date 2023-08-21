@@ -15,6 +15,7 @@ import (
 var lingMap = make(map[string]int)
 var pessoaMapCache sync.Map
 var idPessoaMapCache sync.Map
+var apelidoMapCache sync.Map
 
 func InitLingMap(db *sql.DB) {
 
@@ -69,6 +70,14 @@ func runInsertPessoa(db *sql.DB, p pessoa.Pessoa) (*pessoa.Pessoa, error) {
     
     uuid := uuidGoogle.New().String()
     p.Id = &uuid
+    
+    _, isApelidoMapped := apelidoMapCache.Load(*p.Apelido)
+			
+	if(isApelidoMapped) {
+		
+		return nil, errors.New("Apelido já inserido")
+	}
+	
     pessoaMapCache.Store(*p.Id, p)
 
     return &p, nil
@@ -175,7 +184,7 @@ func runQueryPessoaById(db *sql.DB, id string) (*pessoa.Pessoa, error) {
     return &p, nil
 }
 
-func runInsertPessoaBulk( db *sql.DB) error {
+func runInsertPessoaBulk(db *sql.DB) error {
 
 	var	values []interface{}
 	var placeholders []string
@@ -186,9 +195,16 @@ func runInsertPessoaBulk( db *sql.DB) error {
 		p := value.(pessoa.Pessoa)
 		search := *p.Nome + *p.Apelido
 		
-		_, isIdMapped := idPessoaMapCache.Load(p.Id)
+		_, isIdMapped := idPessoaMapCache.Load(*p.Id)
+		
+		_, isApelidoMapped := apelidoMapCache.Load(*p.Apelido)
 		
 		if(isIdMapped) {
+			return true
+		}
+		
+		if(isApelidoMapped) {
+		
 			return true
 		}
 		
@@ -241,26 +257,28 @@ func runInsertPessoaBulk( db *sql.DB) error {
 		return true
 	})
 	
-	addIdToCache(db)
+	addIdApelidToCache(db)
 	
 	return nil
 }
 
 
-func addIdToCache(db *sql.DB) {
+func addIdApelidToCache(db *sql.DB) {
 	
-	rows, err := db.Query(`SELECT pessoa.id FROM pessoa;`)
+	rows, err := db.Query(`SELECT id,apelido FROM pessoa;`)
 	    
     checkErr(err)
     defer rows.Close()
     
     for rows.Next() {
         var id string
+        var apelido string
 
-        err = rows.Scan(&id)
+        err = rows.Scan(&id, &apelido)
         checkErr(err)
         
         idPessoaMapCache.Store(id, id)
+        apelidoMapCache.Store(apelido, apelido)
     }
 }
 
