@@ -78,9 +78,10 @@ func postPessoas(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return		
     }
-    
+
+    w.Header().Set("Location", "/pessoas/"+*pessoaInserted.Id)    
     w.WriteHeader(http.StatusCreated)			
-    w.Header().Set("Location", "/pessoas/"+*pessoaInserted.Id)
+
 }
 
 func checkDateIsValid( date string) bool {
