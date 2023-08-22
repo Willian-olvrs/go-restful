@@ -192,6 +192,7 @@ func getPessoas(w http.ResponseWriter, r *http.Request) {
 	
 	if(err != nil){
 		w.WriteHeader(http.StatusNotFound)
+		return
 	}
 	json.NewEncoder(w).Encode(*p)
 }

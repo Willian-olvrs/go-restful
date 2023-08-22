@@ -91,7 +91,7 @@ func runQueryTerm(db *sql.DB, term string) map[string]pessoa.Pessoa {
    	rows_query_pessoas, err := db.Query(`
     	SELECT id, apelido, nome, nascimento, stack
 			FROM pessoa 
-			WHERE search_p LIKE '%'||$1||'%'`, term)
+			WHERE search_p LIKE '%'||$1||'%' LIMIT 50`, term)
 	checkErr(err)
    	defer rows_query_pessoas.Close()
 	for rows_query_pessoas.Next() {
